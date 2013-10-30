@@ -1,6 +1,6 @@
 all:
 	g++ -ggdb -static trace.c -o tracer
-	g++ -ggdb -static trace.c -o loader
+	g++ -ggdb -static loader.c -o loader
 	g++ -ggdb -static pager.c -o pager
 	g++ -ggdb -static test1.c -o test1 
 	g++ -ggdb -static test2.c -o test2 

@@ -6,10 +6,13 @@
 #include <fcntl.h>
 #include <elf.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <errno.h>
 #include <string.h>
 #include <dlfcn.h>
+#include <iostream>
 
+#define ERROR -1
 #define NUM_STACK_PAGES 10
 
 void* entry_addr = NULL;
@@ -29,7 +32,7 @@ void load_program (char* filename)
 		if(fd == ERROR)
 		{
 			printf("open failed, errno: %s\n", strerror(errno));
-			EXIT(EXIT_FAILURE);
+			exit(EXIT_FAILURE);
 		}
 
 		{
@@ -38,7 +41,7 @@ void load_program (char* filename)
 			if(r == ERROR)
 			{
 				printf("read failed, errno: %s\n", strerror(errno));
-				EXIT(EXIT_FAILURE);
+				exit(EXIT_FAILURE);
 			}
 		}
 		close(fd);
@@ -55,25 +58,24 @@ void load_program (char* filename)
 	}
 
 	// Setup memory for ELF Binary
-	addr = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
-			MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	addr = (char*) mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
 	if(addr == MAP_FAILED)
 	{
 		printf("map failed, errno: %s\n", strerror(errno));
-		EXIT(EXIT_FAILURE);
+		exit(EXIT_FAILURE);
 	}
 	memset(addr,0x0,size);
 	entry_addr = addr + ehdr.e_entry;
 	phdr_addr = addr;
-	phnum = e_phnum;
-	phent = e_phentsize;
+	phnum = ehdr.e_phnum;
+	phent = ehdr.e_phentsize;
 	{
 		int fd = open(filename, O_RDONLY);
 		if(fd == ERROR)
 		{
 			printf("open failed, errno: %s\n", strerror(errno));
-			EXIT(EXIT_FAILURE);
+			exit(EXIT_FAILURE);
 		}
 
 		off_t offset = lseek(fd, ehdr.e_phoff, SEEK_SET); 
@@ -98,7 +100,7 @@ void load_program (char* filename)
 				if(r == ERROR)
 				{
 					printf("read failed, errno: %s\n", strerror(errno));
-					EXIT(EXIT_FAILURE);
+					exit(EXIT_FAILURE);
 				}
 				close(readfd);
 			}
@@ -131,7 +133,7 @@ void new_aux_ent(uint64_t* auxv_ptr, uint64_t val, uint64_t id)
 	*(--auxv_ptr) = id;
 }
 
-void* setup_stack(char* filename, void* entry_addr)
+void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char** envp)
 {
 	// Allocate Anonomous mmap for stack
 	size_t size = NUM_STACK_PAGES * getpagesize(); 
@@ -140,8 +142,8 @@ void* setup_stack(char* filename, void* entry_addr)
 
 	// Add ELF AUXV to stack
 	// AT_NULL
-	stack_ptr -= sizeof(struct Elf64_auxv_t);
-	memset(stack_ptr, 0, sizeof(struct Elf64_auxv_t));
+	stack_ptr -= sizeof(Elf64_auxv_t);
+	memset(stack_ptr, 0, sizeof(Elf64_auxv_t));
 
 	uint64_t* auxv_ptr = (uint64_t*) stack_ptr;
 	new_aux_ent(auxv_ptr, getegid(), AT_EGID);
@@ -152,7 +154,7 @@ void* setup_stack(char* filename, void* entry_addr)
 	new_aux_ent(auxv_ptr, 0, AT_ENTRY);
 	new_aux_ent(auxv_ptr, phnum, AT_PHNUM);
 	new_aux_ent(auxv_ptr, phent, AT_PHENT);
-	new_aux_ent(auxv_ptr, phdr_addr, AT_PHDR);
+	new_aux_ent(auxv_ptr, (uint64_t) phdr_addr, AT_PHDR);
 	new_aux_ent(auxv_ptr, CLOCKS_PER_SEC, AT_CLKTCK);
 	new_aux_ent(auxv_ptr, getpagesize(), AT_PAGESZ);
 
@@ -167,7 +169,7 @@ void* setup_stack(char* filename, void* entry_addr)
 		}
 
 		memset(--char_ptr, 0, sizeof(char**));
-		for(size_t i = 0; i < count; ++i;)
+		for(size_t i = 0; i < count; ++i)
 		{
 			*(--char_ptr) = *(--env);
 		}
@@ -176,9 +178,9 @@ void* setup_stack(char* filename, void* entry_addr)
 	{
 		char** arg = argv + sizeof(char**) * argc;
 		memset(--char_ptr, 0, sizeof(char**));
-		for(size_t i = 0; i < argc; ++i;)
+		for(size_t i = 0; i < argc; ++i)
 		{
-			*(--char_ptr) = *(--env);
+			*(--char_ptr) = *(--arg);
 		}
 	}
 	int* int_ptr = (int*) char_ptr;
@@ -192,7 +194,8 @@ int main(int argc, char** argv, char** envp)
 	load_program(argv[1]);
 
 	// Setup Stack
-	void* stack_ptr = setup_stack(argv[1], entry_addr);
+	void* stack_ptr = setup_stack(argv[1], entry_addr, argc, argv, envp);
+
 	asm("movq %0, %%rsp\n\t" : "g" ((uint64_t) stack_ptr));
 
 	// Clear Registers
@@ -204,6 +207,6 @@ int main(int argc, char** argv, char** envp)
 	asm("movq $0, %rbp");
 
 	// Jump to test program
-	asm("movq %0, %%rax\n\t" : "g" ((uint64_t) entry_ptr));
+	asm("movq %0, %%rax\n\t" : "g" ((uint64_t) entry_addr));
 	asm("jmp %rax\n\t");	
 }
