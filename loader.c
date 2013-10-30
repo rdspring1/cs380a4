@@ -10,11 +10,17 @@
 #include <string.h>
 #include <dlfcn.h>
 
+#define NUM_STACK_PAGES 10
+
+void* entry_addr = NULL;
+void* phdr_addr = NULL;
+size_t phnum;
+size_t phent;
+
 void load_program (char* filename)
 {
 	Elf64_Ehdr      ehdr;
 	char            *taddr   = NULL;
-	void            *entry_addr   = NULL;
 	char            *addr    = NULL;
 	size_t size;
 
@@ -59,6 +65,9 @@ void load_program (char* filename)
 	}
 	memset(addr,0x0,size);
 	entry_addr = addr + ehdr.e_entry;
+	phdr_addr = addr;
+	phnum = e_phnum;
+	phent = e_phentsize;
 	{
 		int fd = open(filename, O_RDONLY);
 		if(fd == ERROR)
@@ -114,28 +123,77 @@ void load_program (char* filename)
 		}
 		close(fd);
 	}
-	return entry_addr;
 }
 
-void setup_stack(char* filename, void* entry_addr)
+void new_aux_ent(uint64_t* auxv_ptr, uint64_t val, uint64_t id)
+{
+	*(--auxv_ptr) = val;
+	*(--auxv_ptr) = id;
+}
+
+void* setup_stack(char* filename, void* entry_addr)
 {
 	// Allocate Anonomous mmap for stack
-	size_t size = NUM_STACK_PAGES *; 
+	size_t size = NUM_STACK_PAGES * getpagesize(); 
 	void* addr = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	// Add argc and argc to stack
-
-	// Add envp to stack
+	char* stack_ptr = (char*) addr + size;
 
 	// Add ELF AUXV to stack
+	// AT_NULL
+	stack_ptr -= sizeof(struct Elf64_auxv_t);
+	memset(stack_ptr, 0, sizeof(struct Elf64_auxv_t));
+
+	uint64_t* auxv_ptr = (uint64_t*) stack_ptr;
+	new_aux_ent(auxv_ptr, getegid(), AT_EGID);
+	new_aux_ent(auxv_ptr, getgid(), AT_GID);
+	new_aux_ent(auxv_ptr, geteuid(), AT_EUID);
+	new_aux_ent(auxv_ptr, getuid(), AT_UID);
+	new_aux_ent(auxv_ptr, (uint64_t) entry_addr, AT_ENTRY);
+	new_aux_ent(auxv_ptr, 0, AT_ENTRY);
+	new_aux_ent(auxv_ptr, phnum, AT_PHNUM);
+	new_aux_ent(auxv_ptr, phent, AT_PHENT);
+	new_aux_ent(auxv_ptr, phdr_addr, AT_PHDR);
+	new_aux_ent(auxv_ptr, CLOCKS_PER_SEC, AT_CLKTCK);
+	new_aux_ent(auxv_ptr, getpagesize(), AT_PAGESZ);
+
+	// Add envp to stack
+	char** char_ptr = (char**) auxv_ptr;
+	{
+		size_t count = 0;
+		char** env;
+		for(env = envp; *env != 0; ++env)
+		{
+			++count;
+		}
+
+		memset(--char_ptr, 0, sizeof(char**));
+		for(size_t i = 0; i < count; ++i;)
+		{
+			*(--char_ptr) = *(--env);
+		}
+	}
+	// Add argc and argc to stack
+	{
+		char** arg = argv + sizeof(char**) * argc;
+		memset(--char_ptr, 0, sizeof(char**));
+		for(size_t i = 0; i < argc; ++i;)
+		{
+			*(--char_ptr) = *(--env);
+		}
+	}
+	int* int_ptr = (int*) char_ptr;
+	*(--int_ptr) = argc;
+	return (void*) int_ptr;
 }
 
 int main(int argc, char** argv, char** envp)
 {
 	// Static Pager
-	void* entry_addr = load_program(argv[1]);
+	load_program(argv[1]);
 
 	// Setup Stack
-	setup_stack(argv[1], entry_addr);
+	void* stack_ptr = setup_stack(argv[1], entry_addr);
+	asm("movq %0, %%rsp\n\t" : "g" ((uint64_t) stack_ptr));
 
 	// Clear Registers
 	asm("movq $0, %rbx");
@@ -144,5 +202,8 @@ int main(int argc, char** argv, char** envp)
 	asm("movq $0, %rsi");
 	asm("movq $0, %rdi");
 	asm("movq $0, %rbp");
+
 	// Jump to test program
+	asm("movq %0, %%rax\n\t" : "g" ((uint64_t) entry_ptr));
+	asm("jmp %rax\n\t");	
 }
