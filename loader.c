@@ -54,11 +54,11 @@ void load_program (char* filename)
 			printf("stat failed, errno: %s\n", strerror(errno));
 			exit(EXIT_FAILURE);
 		}
-		size = sb.st_size;
+		size = sb.st_size + 1;
 	}
 
 	// Setup memory for ELF Binary
-	addr = (char*) mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	taddr = addr = (char*) mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
 	if(addr == MAP_FAILED)
 	{
@@ -91,7 +91,7 @@ void load_program (char* filename)
 			}
 
 			// p_filesz can be smaller than p_memsz
-			char buf[phdr.p_filesz];
+			char* buf = (char* ) malloc(sizeof(char) * phdr.p_filesz);
 			// Read data into buffer and then copy data from buffer to mmap
 			{
 				int readfd = open(filename, O_RDONLY);
@@ -105,23 +105,31 @@ void load_program (char* filename)
 				close(readfd);
 			}
 
-			taddr = phdr.p_vaddr + addr;
-			memmove(taddr,buf,phdr.p_filesz);
+			// Move Data
+			for(unsigned i = 0; i < phdr.p_filesz; ++i)
+			{
+				//std::cout << i << std::endl;
+				*taddr = buf[i];
+				++taddr;
+			}
 
+			char* start_taddr = taddr;
 			if(phdr.p_flags & PF_R) 
 			{
-				mprotect((unsigned char *) taddr, phdr.p_memsz, PROT_READ);
+				mprotect((unsigned char *) start_taddr, phdr.p_memsz, PROT_READ);
 			}
 
 			if(phdr.p_flags & PF_W) 
 			{
-				mprotect((unsigned char *) taddr, phdr.p_memsz, PROT_WRITE);
+				mprotect((unsigned char *) start_taddr, phdr.p_memsz, PROT_WRITE);
 			}
 
 			if(phdr.p_flags & PF_X) 
 			{
-				mprotect((unsigned char *) taddr, phdr.p_memsz, PROT_EXEC);
+				mprotect((unsigned char *) start_taddr, phdr.p_memsz, PROT_EXEC);
 			}
+			
+			free(buf);
 		}
 		close(fd);
 	}
@@ -196,17 +204,16 @@ int main(int argc, char** argv, char** envp)
 	// Setup Stack
 	void* stack_ptr = setup_stack(argv[1], entry_addr, argc, argv, envp);
 
-	asm("movq %0, %%rsp\n\t" : "g" ((uint64_t) stack_ptr));
-
 	// Clear Registers
-	asm("movq $0, %rbx");
-	asm("movq $0, %rcx");
-	asm("movq $0, %rdx");
-	asm("movq $0, %rsi");
-	asm("movq $0, %rdi");
-	asm("movq $0, %rbp");
+	//asm("movq $0, %rbx");
+	//asm("movq $0, %rcx");
+	//asm("movq $0, %rdx");
+	//asm("movq $0, %rsi");
+	//asm("movq $0, %rdi");
+	//asm("movq $0, %rbp");
 
 	// Jump to test program
-	asm("movq %0, %%rax\n\t" : "g" ((uint64_t) entry_addr));
-	asm("jmp %rax\n\t");	
+	asm("movq %0, %%rsp\n\t" : "+r" ((uint64_t) stack_ptr));
+	asm("movq %0, %%rax\n\t" : "+r" ((uint64_t) entry_addr));
+	asm("jmp *%rax\n\t");	
 }
