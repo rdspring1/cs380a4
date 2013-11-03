@@ -57,20 +57,10 @@ void load_program (char* filename)
 		size = sb.st_size + 1;
 	}
 
-	// Setup memory for ELF Binary
-	taddr = addr = (char*) mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-
-	if(addr == MAP_FAILED)
-	{
-		printf("map failed, errno: %s\n", strerror(errno));
-		exit(EXIT_FAILURE);
-	}
-	memset(addr,0x0,size);
-	entry_addr = addr + ehdr.e_entry;
-	phdr_addr = addr;
 	phnum = ehdr.e_phnum;
 	phent = ehdr.e_phentsize;
 	{
+		bool first = true;
 		int fd = open(filename, O_RDONLY);
 		if(fd == ERROR)
 		{
@@ -88,6 +78,20 @@ void load_program (char* filename)
 			if(phdr.p_type != PT_LOAD || !phdr.p_filesz) 
 			{
 				continue;
+			}
+
+			if(first)
+			{
+				// Setup memory for ELF Binary
+				entry_addr = phdr_addr = mmap((void*) phdr.p_vaddr, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+				taddr = addr = (char*) phdr_addr; 
+				if(addr == MAP_FAILED)
+				{
+					printf("map failed, errno: %s\n", strerror(errno));
+					exit(EXIT_FAILURE);
+				}
+				memset(addr,0x0,size);
+				first = false;
 			}
 
 			// p_filesz can be smaller than p_memsz
@@ -108,27 +112,28 @@ void load_program (char* filename)
 			// Move Data
 			for(unsigned i = 0; i < phdr.p_filesz; ++i)
 			{
-				//std::cout << i << std::endl;
 				*taddr = buf[i];
 				++taddr;
 			}
+			taddr += (phdr.p_memsz - phdr.p_filesz);
 
 			char* start_taddr = taddr;
+			int prot = 0;
 			if(phdr.p_flags & PF_R) 
 			{
-				mprotect((unsigned char *) start_taddr, phdr.p_memsz, PROT_READ);
+				prot |= PROT_READ;
 			}
 
 			if(phdr.p_flags & PF_W) 
 			{
-				mprotect((unsigned char *) start_taddr, phdr.p_memsz, PROT_WRITE);
+				prot |= PROT_WRITE;
 			}
 
 			if(phdr.p_flags & PF_X) 
 			{
-				mprotect((unsigned char *) start_taddr, phdr.p_memsz, PROT_EXEC);
+				prot |= PROT_EXEC;
 			}
-			
+			mprotect((unsigned char *) start_taddr, phdr.p_memsz, prot);
 			free(buf);
 		}
 		close(fd);
