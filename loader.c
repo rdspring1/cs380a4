@@ -15,6 +15,8 @@
 #define ERROR -1
 #define NUM_STACK_PAGES 10
 
+using namespace std;
+
 void* entry_addr = NULL;
 void* phdr_addr = NULL;
 size_t phnum;
@@ -23,10 +25,6 @@ size_t phent;
 void load_program (char* filename)
 {
 	Elf64_Ehdr      ehdr;
-	char            *taddr   = NULL;
-	char            *addr    = NULL;
-	size_t size;
-
 	{
 		int fd = open(filename, O_RDONLY);
 		if(fd == ERROR)
@@ -47,16 +45,7 @@ void load_program (char* filename)
 		close(fd);
 	}
 
-	{
-		struct stat sb;
-		if (stat(filename, &sb) == -1) 
-		{
-			printf("stat failed, errno: %s\n", strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-		size = sb.st_size + 1;
-	}
-
+	entry_addr = (void*) ehdr.e_entry;
 	phnum = ehdr.e_phnum;
 	phent = ehdr.e_phentsize;
 	{
@@ -75,49 +64,17 @@ void load_program (char* filename)
 			ssize_t s = read(fd, (void*) &phdr, sizeof(phdr));
 			offset = lseek(fd, offset + sizeof(phdr), SEEK_SET); 
 
-			if(phdr.p_type != PT_LOAD || !phdr.p_filesz) 
+			if(phdr.p_type != PT_LOAD || !phdr.p_memsz) 
 			{
 				continue;
 			}
-
+	
 			if(first)
 			{
-				// Setup memory for ELF Binary
-				entry_addr = phdr_addr = mmap((void*) phdr.p_vaddr, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
-				taddr = addr = (char*) phdr_addr; 
-				if(addr == MAP_FAILED)
-				{
-					printf("map failed, errno: %s\n", strerror(errno));
-					exit(EXIT_FAILURE);
-				}
-				memset(addr,0x0,size);
+				phdr_addr = (char*) phdr.p_vaddr;
 				first = false;
 			}
 
-			// p_filesz can be smaller than p_memsz
-			char* buf = (char* ) malloc(sizeof(char) * phdr.p_filesz);
-			// Read data into buffer and then copy data from buffer to mmap
-			{
-				int readfd = open(filename, O_RDONLY);
-				ssize_t r = read(readfd, buf, phdr.p_filesz);
-
-				if(r == ERROR)
-				{
-					printf("read failed, errno: %s\n", strerror(errno));
-					exit(EXIT_FAILURE);
-				}
-				close(readfd);
-			}
-
-			// Move Data
-			for(unsigned i = 0; i < phdr.p_filesz; ++i)
-			{
-				*taddr = buf[i];
-				++taddr;
-			}
-			taddr += (phdr.p_memsz - phdr.p_filesz);
-
-			char* start_taddr = taddr;
 			int prot = 0;
 			if(phdr.p_flags & PF_R) 
 			{
@@ -133,8 +90,27 @@ void load_program (char* filename)
 			{
 				prot |= PROT_EXEC;
 			}
-			mprotect((unsigned char *) start_taddr, phdr.p_memsz, prot);
-			free(buf);
+
+			// Setup memory for ELF Binary
+			size_t page_align = phdr.p_offset % sysconf(_SC_PAGE_SIZE);
+			size_t aligned_vaddr = phdr.p_vaddr - page_align;
+			size_t aligned_offset = phdr.p_offset - page_align;
+
+			char* addr = (char*) mmap((void*) aligned_vaddr, page_align + phdr.p_memsz, prot, MAP_PRIVATE | MAP_FIXED, fd, aligned_offset);
+			if(addr == MAP_FAILED)
+			{
+				printf("map failed, errno: %s\n", strerror(errno));
+				exit(EXIT_FAILURE);
+			}
+
+			// Clear Page Aligned Offset
+			memset(addr, 0x0, page_align);
+
+			// If memsz is greater than filesz, clear remaining memory address
+			if(phdr.p_memsz > phdr.p_filesz)
+			{
+				memset((void*) (addr + page_align + phdr.p_filesz), 0x0, phdr.p_memsz - phdr.p_filesz);
+			}
 		}
 		close(fd);
 	}
@@ -216,6 +192,9 @@ int main(int argc, char** argv, char** envp)
 	//asm("movq $0, %rsi");
 	//asm("movq $0, %rdi");
 	//asm("movq $0, %rbp");
+
+	printf("stack_ptr: %p\n", stack_ptr);	
+	printf("entry_ptr: %p\n", entry_addr);	
 
 	// Jump to test program
 	asm("movq %0, %%rsp\n\t" : "+r" ((uint64_t) stack_ptr));
