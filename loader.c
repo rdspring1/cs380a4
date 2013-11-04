@@ -14,7 +14,6 @@
 
 #define ERROR -1
 #define NUM_STACK_PAGES 32
-#define HWCAP 0x178bfbff
 
 using namespace std;
 
@@ -26,23 +25,13 @@ size_t phent;
 
 void print_elf_auxv(char** sp)
 {
-	printf("print_elf_auxv %p\n", sp);
-	printf("argv\n");
 	/* walk past all argv pointers */
 	while (*sp++ != NULL)
-	{
-		if(*sp != NULL)
-			printf("%s\n", *sp);
-	}
+		;
 
-	printf("envp\n");
 	/* walk past all env pointers */
 	while (*sp++ != NULL)
-	{
-		if(*sp != NULL)
-			printf("%s\n", *sp);
-	}
-
+		;
 
 	{
 		Elf64_auxv_t *auxv = (Elf64_auxv_t *) sp;
@@ -143,6 +132,11 @@ void print_elf_auxv(char** sp)
 					printf("AT_PLATFORM : %lu\n", auxv->a_un.a_val);
 					break;
 				}	
+			case AT_HWCAP:
+			{
+				printf("AT_HWCAP : %lu\n", auxv->a_un.a_val);
+				break;
+			}
 		}
 	}
 }
@@ -196,7 +190,7 @@ void load_program (char* filename)
 
 			if(first)
 			{
-				phdr_addr = (char*) phdr.p_vaddr;
+				phdr_addr = (char*) phdr.p_vaddr + ehdr.e_phoff;
 				first = false;
 			}
 
@@ -243,7 +237,6 @@ void load_program (char* filename)
 
 void new_aux_ent(uint64_t*& auxv_ptr, uint64_t val, uint64_t id)
 {
-	printf("%p\n", auxv_ptr);
 	*(--auxv_ptr) = val;
 	*(--auxv_ptr) = id;
 }
@@ -254,7 +247,6 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 	size_t size = NUM_STACK_PAGES * getpagesize(); 
 	void* addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	char* stack_ptr = (char*) addr + size;
-	printf("%p\n", stack_ptr);
 
 	// Add ELF AUXV to stack
 	// AT_NULL
@@ -277,11 +269,9 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 	new_aux_ent(auxv_ptr, (uint64_t) phdr_addr, AT_PHDR);
 	new_aux_ent(auxv_ptr, CLOCKS_PER_SEC, AT_CLKTCK);
 	new_aux_ent(auxv_ptr, getpagesize(), AT_PAGESZ);
-	new_aux_ent(auxv_ptr, HWCAP, AT_HWCAP);
 
 	// Add envp to stack
 	char** char_ptr = (char**) auxv_ptr;
-	printf("envp %p\n", char_ptr);
 	{
 		size_t envc = 0;
 		for(char** env = envp; *env != 0; ++env)
@@ -294,7 +284,6 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 			*(--char_ptr) = envp[i];
 		}
 	}
-	printf("argv %p\n", char_ptr);
 	// Add argv to stack
 	{
 		memset(--char_ptr, 0, sizeof(char**));
@@ -303,10 +292,10 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 			*(--char_ptr) = argv[i];
 		}
 	}
-	printf("argv start %p\n", char_ptr);
 	long* long_ptr = (long*) char_ptr;
 	*(--long_ptr) = argc - 1;
-	print_elf_auxv((char**) long_ptr);
+	// Debug Purposes - Print ELF AUXV vector
+	//print_elf_auxv((char**) long_ptr);
 	return (void*) long_ptr;
 }
 
@@ -326,8 +315,8 @@ int main(int argc, char** argv, char** envp)
 	// Setup Stack
 	void* stack_ptr = setup_stack(argv[1], entry_addr, argc, argv, envp);
 
-	printf("stack_ptr: %p\n", stack_ptr);	
-	printf("entry_ptr: %p\n", entry_addr);	
+	//printf("stack_ptr: %p\n", stack_ptr);	
+	//printf("entry_ptr: %p\n", entry_addr);	
 
 	// Jump to test program
 	asm("movq %0, %%rsp\n\t" : "+r" ((uint64_t) stack_ptr));
