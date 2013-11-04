@@ -13,7 +13,8 @@
 #include <iostream>
 
 #define ERROR -1
-#define NUM_STACK_PAGES 10
+#define NUM_STACK_PAGES 32
+#define HWCAP 0x178bfbff
 
 using namespace std;
 
@@ -127,7 +128,7 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 {
 	// Allocate Anonomous mmap for stack
 	size_t size = NUM_STACK_PAGES * getpagesize(); 
-	void* addr = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	void* addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	char* stack_ptr = (char*) addr + size;
 
 	// Add ELF AUXV to stack
@@ -138,19 +139,21 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 	uint64_t* auxv_ptr = (uint64_t*) stack_ptr;
 	new_aux_ent(auxv_ptr, 0, AT_IGNORE);
 	new_aux_ent(auxv_ptr, elf_fd, AT_EXECFD);
-	new_aux_ent(auxv_ptr, (uint64_t) phdr_addr, AT_PHDR);
-	new_aux_ent(auxv_ptr, phent, AT_PHENT);
-	new_aux_ent(auxv_ptr, phnum, AT_PHNUM);
-	new_aux_ent(auxv_ptr, getpagesize(), AT_PAGESZ);
-	new_aux_ent(auxv_ptr, 0, AT_BASE);
-	new_aux_ent(auxv_ptr, 0, AT_ENTRY);
-	new_aux_ent(auxv_ptr, (uint64_t) entry_addr, AT_ENTRY);
 	new_aux_ent(auxv_ptr, 0, AT_NOTELF);
-	new_aux_ent(auxv_ptr, getuid(), AT_UID);
-	new_aux_ent(auxv_ptr, geteuid(), AT_EUID);
-	new_aux_ent(auxv_ptr, getgid(), AT_GID);
 	new_aux_ent(auxv_ptr, getegid(), AT_EGID);
+	new_aux_ent(auxv_ptr, getgid(), AT_GID);
+	new_aux_ent(auxv_ptr, geteuid(), AT_EUID);
+	new_aux_ent(auxv_ptr, getuid(), AT_UID);
+	new_aux_ent(auxv_ptr, (uint64_t) entry_addr, AT_ENTRY);
+	new_aux_ent(auxv_ptr, 0, AT_FLAGS);
+	new_aux_ent(auxv_ptr, 0, AT_BASE);
+	new_aux_ent(auxv_ptr, phnum, AT_PHNUM);
+	new_aux_ent(auxv_ptr, phent, AT_PHENT);
+	new_aux_ent(auxv_ptr, (uint64_t) phdr_addr, AT_PHDR);
 	new_aux_ent(auxv_ptr, CLOCKS_PER_SEC, AT_CLKTCK);
+	new_aux_ent(auxv_ptr, getpagesize(), AT_PAGESZ);
+	new_aux_ent(auxv_ptr, HWCAP, AT_HWCAP);
+
 	// Add envp to stack
 	char** char_ptr = (char**) auxv_ptr;
 	{
@@ -176,6 +179,64 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 	long* long_ptr = (long*) char_ptr;
 	*(--long_ptr) = argc - 1;
 	return (void*) long_ptr;
+}
+
+void print_auxv(char** envp)
+{
+        /* and find ELF auxiliary vectors (if this was an ELF binary) */
+	int i = 0;
+        for (Elf64_auxv_t *auxv = (Elf64_auxv_t *) envp; auxv->a_type != AT_NULL; ++auxv) 
+	{
+		printf("%d : ", ++i);
+		switch (auxv->a_type)
+		{
+			case AT_NULL:
+			{
+				printf("AT_NULL\n");
+				break;
+			}
+			case AT_IGNORE:
+			{
+				printf("AT_IGNORE\n");
+				break;
+			}
+			case AT_EXECFD:
+			{
+				printf("AT_EXECFD : %lu\n", auxv->a_un.a_val);
+				break;
+			}
+			case AT_PHDR:
+			{
+				printf("AT_PHDR : %p\n", (void*) auxv->a_un.a_val);
+				break;
+			}
+			case AT_PHENT:
+			{
+				printf("AT_PHENT : %lu\n", auxv->a_un.a_val);
+				break;
+			}
+			case AT_PHNUM:
+			{
+				printf("AT_PHNUM : %lu\n", auxv->a_un.a_val);
+				break;
+			}
+			case AT_PAGESZ:
+			{
+				printf("AT_PAGESZ : %lu\n", auxv->a_un.a_val);
+				break;
+			}
+			case AT_BASE:
+			{
+				printf("AT_BASE : %p\n", (void*) auxv->a_un.a_val);
+				break;
+			}
+			case AT_FLAGS:
+			{
+				printf("AT_FLAGS : %lu\n", auxv->a_un.a_val);
+				break;
+			}
+		}
+	}
 }
 
 int main(int argc, char** argv, char** envp)

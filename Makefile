@@ -4,6 +4,7 @@ all:
 	g++ -ggdb -static pager.c -o pager
 	g++ -ggdb -static test1.c -o test1 
 	g++ -ggdb -static test2.c -o test2 
+	g++ -ggdb -static test3.c -o test3 
 
 clean:
 	rm -f tracer
@@ -11,3 +12,4 @@ clean:
 	rm -f pager
 	rm -f test1
 	rm -f test2
+	rm -f test3
