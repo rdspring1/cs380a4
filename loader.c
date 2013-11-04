@@ -17,6 +17,7 @@
 
 using namespace std;
 
+int elf_fd;
 void* entry_addr = NULL;
 void* phdr_addr = NULL;
 size_t phnum;
@@ -68,7 +69,7 @@ void load_program (char* filename)
 			{
 				continue;
 			}
-	
+
 			if(first)
 			{
 				phdr_addr = (char*) phdr.p_vaddr;
@@ -135,18 +136,21 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 	memset(stack_ptr, 0, sizeof(Elf64_auxv_t));
 
 	uint64_t* auxv_ptr = (uint64_t*) stack_ptr;
-	new_aux_ent(auxv_ptr, getegid(), AT_EGID);
-	new_aux_ent(auxv_ptr, getgid(), AT_GID);
-	new_aux_ent(auxv_ptr, geteuid(), AT_EUID);
-	new_aux_ent(auxv_ptr, getuid(), AT_UID);
-	new_aux_ent(auxv_ptr, (uint64_t) entry_addr, AT_ENTRY);
-	new_aux_ent(auxv_ptr, 0, AT_ENTRY);
-	new_aux_ent(auxv_ptr, phnum, AT_PHNUM);
-	new_aux_ent(auxv_ptr, phent, AT_PHENT);
+	new_aux_ent(auxv_ptr, 0, AT_IGNORE);
+	new_aux_ent(auxv_ptr, elf_fd, AT_EXECFD);
 	new_aux_ent(auxv_ptr, (uint64_t) phdr_addr, AT_PHDR);
-	new_aux_ent(auxv_ptr, CLOCKS_PER_SEC, AT_CLKTCK);
+	new_aux_ent(auxv_ptr, phent, AT_PHENT);
+	new_aux_ent(auxv_ptr, phnum, AT_PHNUM);
 	new_aux_ent(auxv_ptr, getpagesize(), AT_PAGESZ);
-
+	new_aux_ent(auxv_ptr, 0, AT_BASE);
+	new_aux_ent(auxv_ptr, 0, AT_ENTRY);
+	new_aux_ent(auxv_ptr, (uint64_t) entry_addr, AT_ENTRY);
+	new_aux_ent(auxv_ptr, 0, AT_NOTELF);
+	new_aux_ent(auxv_ptr, getuid(), AT_UID);
+	new_aux_ent(auxv_ptr, geteuid(), AT_EUID);
+	new_aux_ent(auxv_ptr, getgid(), AT_GID);
+	new_aux_ent(auxv_ptr, getegid(), AT_EGID);
+	new_aux_ent(auxv_ptr, CLOCKS_PER_SEC, AT_CLKTCK);
 	// Add envp to stack
 	char** char_ptr = (char**) auxv_ptr;
 	{
@@ -176,6 +180,13 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 
 int main(int argc, char** argv, char** envp)
 {
+	elf_fd = open(argv[1], O_RDONLY);
+	if(elf_fd == ERROR)
+	{
+		printf("open failed, errno: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+
 	// Static Pager
 	load_program(argv[1]);
 
