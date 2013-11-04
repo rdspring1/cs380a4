@@ -182,19 +182,13 @@ int main(int argc, char** argv, char** envp)
 	// Setup Stack
 	void* stack_ptr = setup_stack(argv[1], entry_addr, argc, argv, envp);
 
-	// Clear Registers
-	//asm("movq $0, %rbx");
-	//asm("movq $0, %rcx");
-	//asm("movq $0, %rdx");
-	//asm("movq $0, %rsi");
-	//asm("movq $0, %rdi");
-	//asm("movq $0, %rbp");
-
 	printf("stack_ptr: %p\n", stack_ptr);	
 	printf("entry_ptr: %p\n", entry_addr);	
 
 	// Jump to test program
 	asm("movq %0, %%rsp\n\t" : "+r" ((uint64_t) stack_ptr));
 	asm("movq %0, %%rax\n\t" : "+r" ((uint64_t) entry_addr));
+	asm("movq $0, %rdx");
+	asm("movq $0, %rbp");
 	asm("jmp *%rax\n\t");	
 }
