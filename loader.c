@@ -150,31 +150,28 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 	// Add envp to stack
 	char** char_ptr = (char**) auxv_ptr;
 	{
-		size_t count = 0;
-		char** env;
-		for(env = envp; *env != 0; ++env)
+		size_t envc = 0;
+		for(char** env = envp; *env != 0; ++env)
 		{
-			++count;
+			++envc;
 		}
-
 		memset(--char_ptr, 0, sizeof(char**));
-		for(size_t i = 0; i < count; ++i)
+		for(int i = envc - 1; i >= 0; --i)
 		{
-			*(--char_ptr) = *(--env);
+			*(--char_ptr) = envp[i];
 		}
 	}
 	// Add argc and argc to stack
 	{
-		char** arg = argv + sizeof(char**) * argc;
 		memset(--char_ptr, 0, sizeof(char**));
-		for(size_t i = 0; i < argc; ++i)
+		for(int i = argc - 1; i > 0; --i)
 		{
-			*(--char_ptr) = *(--arg);
+			*(--char_ptr) = argv[i];
 		}
 	}
-	int* int_ptr = (int*) char_ptr;
-	*(--int_ptr) = argc;
-	return (void*) int_ptr;
+	long* long_ptr = (long*) char_ptr;
+	*(--long_ptr) = argc - 1;
+	return (void*) long_ptr;
 }
 
 int main(int argc, char** argv, char** envp)
