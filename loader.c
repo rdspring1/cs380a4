@@ -24,6 +24,129 @@ void* phdr_addr = NULL;
 size_t phnum;
 size_t phent;
 
+void print_elf_auxv(char** sp)
+{
+	printf("print_elf_auxv %p\n", sp);
+	printf("argv\n");
+	/* walk past all argv pointers */
+	while (*sp++ != NULL)
+	{
+		if(*sp != NULL)
+			printf("%s\n", *sp);
+	}
+
+	printf("envp\n");
+	/* walk past all env pointers */
+	while (*sp++ != NULL)
+	{
+		if(*sp != NULL)
+			printf("%s\n", *sp);
+	}
+
+
+	{
+		Elf64_auxv_t *auxv = (Elf64_auxv_t *) sp;
+		if(auxv->a_type == AT_NULL)
+		{
+			printf("AT_NULL %p\n", auxv);
+		}
+	}
+
+	/* and find ELF auxiliary vectors (if this was an ELF binary) */
+	int i = 0;
+	for (Elf64_auxv_t *auxv = (Elf64_auxv_t *) sp; auxv->a_type != AT_NULL; ++auxv) {
+		printf("%d : ", ++i);
+		switch (auxv->a_type)
+		{
+			case AT_NULL:
+				{
+					printf("AT_NULL\n");
+					break;
+				}
+			case AT_IGNORE:
+				{
+					printf("AT_IGNORE\n");
+					break;
+				}
+			case AT_EXECFD:
+				{
+					printf("AT_EXECFD : %lu\n", auxv->a_un.a_val);
+					break;
+				}
+			case AT_PHDR:
+				{
+					printf("AT_PHDR : %p\n", (void*) auxv->a_un.a_val);
+					break;
+				}
+			case AT_PHENT:
+				{
+					printf("AT_PHENT : %lu\n", auxv->a_un.a_val);
+					break;
+				}
+			case AT_PHNUM:
+				{
+					printf("AT_PHNUM : %lu\n", auxv->a_un.a_val);
+					break;
+				}
+			case AT_PAGESZ:
+				{
+					printf("AT_PAGESZ : %lu\n", auxv->a_un.a_val);
+					break;
+				}
+			case AT_BASE:
+				{
+					printf("AT_BASE : %p\n", (void*) auxv->a_un.a_val);
+					break;
+				}
+			case AT_FLAGS:
+				{
+					printf("AT_FLAGS : %lu\n", auxv->a_un.a_val);
+					break;
+				}
+			case AT_ENTRY:
+				{
+					printf("AT_ENTRY : %p\n", (void*) auxv->a_un.a_val);
+					break;
+				}
+			case AT_NOTELF:
+				{
+					printf("AT_NOTELF : %lu\n", auxv->a_un.a_val);
+					break;
+				}
+			case AT_UID:
+				{
+					printf("AT_UID : %lu\n", auxv->a_un.a_val);
+					break;
+				}
+			case AT_EUID:
+				{
+					printf("AT_EUID : %lu\n", auxv->a_un.a_val);
+					break;
+				}
+			case AT_GID:
+				{
+					printf("AT_GID : %lu\n", auxv->a_un.a_val);
+					break;
+				}
+			case AT_EGID:
+				{
+					printf("AT_EGID : %lu\n", auxv->a_un.a_val);
+					break;
+				}	
+			case AT_CLKTCK:
+				{
+					printf("AT_CLKTCK : %lu\n", auxv->a_un.a_val);
+					break;
+				}	
+			case AT_PLATFORM:
+				{
+					printf("AT_PLATFORM : %lu\n", auxv->a_un.a_val);
+					break;
+				}	
+		}
+	}
+}
+
 void load_program (char* filename)
 {
 	Elf64_Ehdr      ehdr;
@@ -118,8 +241,9 @@ void load_program (char* filename)
 	}
 }
 
-void new_aux_ent(uint64_t* auxv_ptr, uint64_t val, uint64_t id)
+void new_aux_ent(uint64_t*& auxv_ptr, uint64_t val, uint64_t id)
 {
+	printf("%p\n", auxv_ptr);
 	*(--auxv_ptr) = val;
 	*(--auxv_ptr) = id;
 }
@@ -130,6 +254,7 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 	size_t size = NUM_STACK_PAGES * getpagesize(); 
 	void* addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	char* stack_ptr = (char*) addr + size;
+	printf("%p\n", stack_ptr);
 
 	// Add ELF AUXV to stack
 	// AT_NULL
@@ -156,6 +281,7 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 
 	// Add envp to stack
 	char** char_ptr = (char**) auxv_ptr;
+	printf("envp %p\n", char_ptr);
 	{
 		size_t envc = 0;
 		for(char** env = envp; *env != 0; ++env)
@@ -168,7 +294,8 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 			*(--char_ptr) = envp[i];
 		}
 	}
-	// Add argc and argc to stack
+	printf("argv %p\n", char_ptr);
+	// Add argv to stack
 	{
 		memset(--char_ptr, 0, sizeof(char**));
 		for(int i = argc - 1; i > 0; --i)
@@ -176,68 +303,13 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 			*(--char_ptr) = argv[i];
 		}
 	}
+	printf("argv start %p\n", char_ptr);
 	long* long_ptr = (long*) char_ptr;
 	*(--long_ptr) = argc - 1;
+	print_elf_auxv((char**) long_ptr);
 	return (void*) long_ptr;
 }
 
-void print_auxv(char** envp)
-{
-        /* and find ELF auxiliary vectors (if this was an ELF binary) */
-	int i = 0;
-        for (Elf64_auxv_t *auxv = (Elf64_auxv_t *) envp; auxv->a_type != AT_NULL; ++auxv) 
-	{
-		printf("%d : ", ++i);
-		switch (auxv->a_type)
-		{
-			case AT_NULL:
-			{
-				printf("AT_NULL\n");
-				break;
-			}
-			case AT_IGNORE:
-			{
-				printf("AT_IGNORE\n");
-				break;
-			}
-			case AT_EXECFD:
-			{
-				printf("AT_EXECFD : %lu\n", auxv->a_un.a_val);
-				break;
-			}
-			case AT_PHDR:
-			{
-				printf("AT_PHDR : %p\n", (void*) auxv->a_un.a_val);
-				break;
-			}
-			case AT_PHENT:
-			{
-				printf("AT_PHENT : %lu\n", auxv->a_un.a_val);
-				break;
-			}
-			case AT_PHNUM:
-			{
-				printf("AT_PHNUM : %lu\n", auxv->a_un.a_val);
-				break;
-			}
-			case AT_PAGESZ:
-			{
-				printf("AT_PAGESZ : %lu\n", auxv->a_un.a_val);
-				break;
-			}
-			case AT_BASE:
-			{
-				printf("AT_BASE : %p\n", (void*) auxv->a_un.a_val);
-				break;
-			}
-			case AT_FLAGS:
-			{
-				printf("AT_FLAGS : %lu\n", auxv->a_un.a_val);
-				break;
-			}
-		}
-	}
-}
 
 int main(int argc, char** argv, char** envp)
 {

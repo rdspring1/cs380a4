@@ -5,11 +5,21 @@ unsigned int sys;
 
 int main(int argc, char **argv, char **envp) {
 	char** sp = argv;
-        /* walk past all argv pointers */
-        while (*sp++ != NULL);
+	printf("argv\n");
+	/* walk past all argv pointers */
+	while (*sp++ != NULL)
+	{
+		if(*sp != NULL)
+			printf("%s\n", *sp);
+	}
 
-        /* walk past all env pointers */
-        while (*sp++ != NULL);
+	printf("envp\n");
+	/* walk past all env pointers */
+	while (*sp++ != NULL)
+	{
+		if(*sp != NULL)
+			printf("%s\n", *sp);
+	}
 
         /* and find ELF auxiliary vectors (if this was an ELF binary) */
 	int i = 0;
