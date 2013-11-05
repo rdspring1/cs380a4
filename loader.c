@@ -249,12 +249,8 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 	char* stack_ptr = (char*) addr + size;
 
 	// Add ELF AUXV to stack
-	// AT_NULL
-	stack_ptr -= sizeof(Elf64_auxv_t);
-	memset(stack_ptr, 0, sizeof(Elf64_auxv_t));
-
 	uint64_t* auxv_ptr = (uint64_t*) stack_ptr;
-	new_aux_ent(auxv_ptr, 0, AT_IGNORE);
+	new_aux_ent(auxv_ptr, 0, AT_NULL);
 	new_aux_ent(auxv_ptr, elf_fd, AT_EXECFD);
 	new_aux_ent(auxv_ptr, 0, AT_NOTELF);
 	new_aux_ent(auxv_ptr, getegid(), AT_EGID);
@@ -262,12 +258,10 @@ void* setup_stack(char* filename, void* entry_addr, int argc, char** argv, char*
 	new_aux_ent(auxv_ptr, geteuid(), AT_EUID);
 	new_aux_ent(auxv_ptr, getuid(), AT_UID);
 	new_aux_ent(auxv_ptr, (uint64_t) entry_addr, AT_ENTRY);
-	new_aux_ent(auxv_ptr, 0, AT_FLAGS);
 	new_aux_ent(auxv_ptr, 0, AT_BASE);
 	new_aux_ent(auxv_ptr, phnum, AT_PHNUM);
 	new_aux_ent(auxv_ptr, phent, AT_PHENT);
 	new_aux_ent(auxv_ptr, (uint64_t) phdr_addr, AT_PHDR);
-	new_aux_ent(auxv_ptr, CLOCKS_PER_SEC, AT_CLKTCK);
 	new_aux_ent(auxv_ptr, getpagesize(), AT_PAGESZ);
 
 	// Add envp to stack

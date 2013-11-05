@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <malloc.h>
 
-#define SIZE 10
+#define SIZE 1000000
 
 int main(int argc, char* argv[])
 {

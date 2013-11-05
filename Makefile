@@ -7,6 +7,7 @@ all:
 	g++ -ggdb -static test1.c -o test1 
 	g++ -ggdb -static test2.c -o test2 
 	g++ -ggdb -static test3.c -o test3 
+	g++ -ggdb -static null.c -o null 
 
 clean:
 	rm -f tracer
@@ -17,3 +18,4 @@ clean:
 	rm -f test1
 	rm -f test2
 	rm -f test3
+	rm -f null
