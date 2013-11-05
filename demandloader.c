@@ -377,7 +377,7 @@ int main(int argc, char** argv, char** envp)
 
 	// Install SIGSEGV Handler
 	struct sigaction sa;
-	sa.sa_flags = SA_SIGINFO;
+	sa.sa_flags = SA_SIGINFO | SA_NODEFER;
 	sigemptyset(&sa.sa_mask);
 	sa.sa_sigaction = handler;
 	if (sigaction(SIGSEGV, &sa, NULL) == ERROR)
