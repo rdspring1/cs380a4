@@ -35,7 +35,7 @@ static void segreturn(uint64_t addr)
 	// Return to program after loading page
 	//printf("Return from SIGSEGV: %p\n", (void*) addr);
 	void* btlist[BTSIZE];
-	size_t size = backtrace(btlist, BTSIZE);
+	backtrace(btlist, BTSIZE);
 
 	asm("movq %0, %%rsp\n\t" : "+r" ((uint64_t) stack_ptr));
 	asm("movq %0, %%rax\n\t" : "+r" ((uint64_t) entry_addr));
@@ -60,7 +60,7 @@ static void handler(int sig, siginfo_t* si, void* unused)
 		for(Elf64_Half i = 1; i <= ehdr.e_phnum; ++i)
 		{
 			Elf64_Phdr  phdr;
-			ssize_t s = read(fd, (void*) &phdr, sizeof(phdr));
+			read(fd, (void*) &phdr, sizeof(phdr));
 			offset = lseek(fd, offset + sizeof(phdr), SEEK_SET); 
 
 			if(phdr.p_type != PT_LOAD || !phdr.p_memsz || (uint64_t) si->si_addr < phdr.p_vaddr || (uint64_t) si->si_addr > phdr.p_vaddr + phdr.p_memsz) 
@@ -92,7 +92,8 @@ static void handler(int sig, siginfo_t* si, void* unused)
 			size_t page_align = new_offset % sysconf(_SC_PAGE_SIZE);
 			size_t aligned_offset = new_offset - page_align;
 
-			printf("aligned_vaddr: %p\n", (void*) aligned_vaddr);
+			//printf("aligned_vaddr: %p\n", (void*) aligned_vaddr);
+			//printf("aligned_offset: %p\n", (void*) aligned_offset);
 			char* addr = (char*) mmap((void*) aligned_vaddr, sysconf(_SC_PAGE_SIZE), prot, MAP_PRIVATE | MAP_FIXED, fd, aligned_offset);
 			if(addr == MAP_FAILED)
 			{
@@ -106,7 +107,7 @@ static void handler(int sig, siginfo_t* si, void* unused)
 			// If memsz is greater than filesz, clear remaining memory address
 			if(phdr.p_memsz > phdr.p_filesz)
 			{
-				memset((void*) (phdr.p_vaddr + page_align + phdr.p_filesz), 0x0, phdr.p_memsz - phdr.p_filesz);
+				memset((void*) (phdr.p_vaddr + phdr.p_filesz), 0x0, phdr.p_memsz - phdr.p_filesz);
 			}
 			close(fd);
 			segreturn((uint64_t) si->si_addr);
@@ -260,7 +261,7 @@ void load_program (char* filename)
 		for(Elf64_Half i = 1; i <= ehdr.e_phnum && first; ++i)
 		{
 			Elf64_Phdr  phdr;
-			ssize_t s = read(fd, (void*) &phdr, sizeof(phdr));
+			read(fd, (void*) &phdr, sizeof(phdr));
 			offset = lseek(fd, offset + sizeof(phdr), SEEK_SET); 
 
 			if(phdr.p_type != PT_LOAD || !phdr.p_memsz) 
@@ -305,7 +306,7 @@ void load_program (char* filename)
 			// If memsz is greater than filesz, clear remaining memory address
 			if(phdr.p_memsz > phdr.p_filesz)
 			{
-				memset((void*) (phdr.p_vaddr + page_align + phdr.p_filesz), 0x0, phdr.p_memsz - phdr.p_filesz);
+				memset((void*) (phdr.p_vaddr + phdr.p_filesz), 0x0, phdr.p_memsz - phdr.p_filesz);
 			}
 		}
 		close(fd);

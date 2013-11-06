@@ -208,7 +208,7 @@ void load_program (char* filename)
 		for(Elf64_Half i = 1; i <= ehdr.e_phnum; ++i)
 		{
 			Elf64_Phdr  phdr;
-			ssize_t s = read(fd, (void*) &phdr, sizeof(phdr));
+			read(fd, (void*) &phdr, sizeof(phdr));
 			offset = lseek(fd, offset + sizeof(phdr), SEEK_SET); 
 
 			if(phdr.p_type != PT_LOAD || !phdr.p_memsz) 
@@ -256,7 +256,7 @@ void load_program (char* filename)
 			// If memsz is greater than filesz, clear remaining memory address
 			if(phdr.p_memsz > phdr.p_filesz)
 			{
-				memset((void*) (addr + page_align + phdr.p_filesz), 0x0, phdr.p_memsz - phdr.p_filesz);
+				memset((void*) (phdr.p_vaddr + phdr.p_filesz), 0x0, phdr.p_memsz - phdr.p_filesz);
 			}
 		}
 		close(fd);
