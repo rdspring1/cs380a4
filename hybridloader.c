@@ -40,7 +40,7 @@ static void segreturn(uint64_t addr)
 
 static void handler(int sig, siginfo_t* si, void* unused)
 {
-	printf("SIGSEGV at address: %p\n", (void*) si->si_addr);
+	//printf("SIGSEGV at address: %p\n", (void*) si->si_addr);
 	// Load Anonymous MMAP for BSS
 	char* addr = (char*) mmap((void*) si->si_addr, sysconf(_SC_PAGE_SIZE), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
 	if(addr == MAP_FAILED)

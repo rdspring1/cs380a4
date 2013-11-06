@@ -46,7 +46,7 @@ static void segreturn(uint64_t addr)
 
 static void handler(int sig, siginfo_t* si, void* unused)
 {
-	//printf("SIGSEGV at address: %p\n", (void*) si->si_addr);
+	printf("SIGSEGV at address: %p\n", (void*) si->si_addr);
 	// Load Page from ELF Page Header 
 	{
 		int fd = open(filename, O_RDONLY);
@@ -119,6 +119,7 @@ static void handler(int sig, siginfo_t* si, void* unused)
 	char* addr = (char*) mmap((void*) si->si_addr, sysconf(_SC_PAGE_SIZE), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
 	if(addr == MAP_FAILED)
 	{
+		printf("map failed, errno: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 	segreturn((uint64_t) si->si_addr);
