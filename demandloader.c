@@ -85,100 +85,16 @@ static void handler(int sig, siginfo_t* si, void* unused)
 			}
 
 			// Setup memory for ELF Binary
-			/*
-			   size_t size_offset = (uint64_t) si->si_addr % sysconf(_SC_PAGE_SIZE);
-			   size_t aligned_vaddr = (uint64_t) si->si_addr - size_offset;
-			   size_t addr_diff = aligned_vaddr - phdr.p_vaddr;
-			   size_t new_offset = phdr.p_offset + addr_diff;
-			   size_t page_align = new_offset % sysconf(_SC_PAGE_SIZE);
-			   size_t aligned_offset = new_offset - page_align;
+			size_t size_offset = (uint64_t) si->si_addr % sysconf(_SC_PAGE_SIZE);
+			size_t aligned_vaddr = (uint64_t) si->si_addr - size_offset;
+			size_t addr_diff = aligned_vaddr - phdr.p_vaddr;
+			size_t new_offset = phdr.p_offset + addr_diff;
+			size_t page_align = new_offset % sysconf(_SC_PAGE_SIZE);
+			size_t aligned_offset = new_offset - page_align;
 
-			   printf("aligned_vaddr: %p\n", (void*) aligned_vaddr);
-			   printf("aligned_offset: %lu\n", aligned_offset);
-			   char* addr = (char*) mmap((void*) aligned_vaddr, sysconf(_SC_PAGE_SIZE), prot, MAP_PRIVATE | MAP_FIXED, fd, aligned_offset);
-			   if(addr == MAP_FAILED)
-			   {
-			   printf("header map failed, errno: %s\n", strerror(errno));
-			   exit(EXIT_FAILURE);
-			   }
-			   memset((void*) addr, 0x0, page_align);
-
-			   size_t size_offset = (uint64_t) si->si_addr % sysconf(_SC_PAGE_SIZE);
-			   size_t aligned_vaddr = (uint64_t) si->si_addr - size_offset;
-			   size_t addr_diff = aligned_vaddr - phdr.p_vaddr;
-			   size_t new_offset = phdr.p_offset + addr_diff;
-			   size_t align_page = new_offset % sysconf(_SC_PAGE_SIZE);
-			   size_t aligned_offset = new_offset - align_page;
-
-			   size_t page_align = phdr.p_offset % sysconf(_SC_PAGE_SIZE);
-			   size_t start_vaddr = phdr.p_vaddr - page_align; 
-			   size_t current_vaddr = start_vaddr;
-			   size_t current_offset = phdr.p_offset - page_align;
-			   size_t size = page_align + phdr.p_memsz;
-
-			   printf("aligned_vaddr: %p\n", (void*) aligned_vaddr);
-			   printf("aligned_offset: %p\n", (void*) aligned_offset);
-			   while(current_vaddr != aligned_vaddr)
-			   {
-			   current_vaddr += sysconf(_SC_PAGE_SIZE);
-			   current_offset += sysconf(_SC_PAGE_SIZE);
-			   size -= sysconf(_SC_PAGE_SIZE);
-			   }
-			   printf("current_vaddr: %p\n", (void*) current_vaddr);
-			   printf("current_offset: %p\n", (void*) current_offset);
-
-			   char* addr = NULL;
-			   if(size < sysconf(_SC_PAGE_SIZE))
-			   {				
-			   addr = (char*) mmap((void*) current_vaddr, size, prot, MAP_PRIVATE | MAP_FIXED, fd, current_offset);
-			   }
-			   else
-			   {
-			   addr = (char*) mmap((void*) current_vaddr, sysconf(_SC_PAGE_SIZE), prot, MAP_PRIVATE | MAP_FIXED, fd, current_offset);
-			   }
-
-			   if(addr == MAP_FAILED)
-			   {
-			   printf("map failed, errno: %s\n", strerror(errno));
-			   exit(EXIT_FAILURE);
-			   }
-
-			// Clear Page Aligned Offset
-			if(current_vaddr == start_vaddr)
-			{
-			memset((void*) start_vaddr, 0x0, page_align);
-			}
-			 */
-			size_t page_align = phdr.p_offset % sysconf(_SC_PAGE_SIZE);
-			size_t aligned_vaddr = phdr.p_vaddr - page_align;
-			size_t aligned_offset = phdr.p_offset - page_align;
-			size_t size = page_align + phdr.p_memsz;
-
-			size_t current_vaddr = aligned_vaddr;
-			size_t current_offset = aligned_offset;
-
-			char* addr = NULL;
-			while(size >= (size_t) sysconf(_SC_PAGE_SIZE))
-			{
-				size_t exit_vaddr = current_vaddr + sysconf(_SC_PAGE_SIZE);
-				if((size_t) si->si_addr >= current_vaddr && (size_t) si->si_addr < exit_vaddr)
-					break;
-				current_vaddr += sysconf(_SC_PAGE_SIZE);
-				current_offset += sysconf(_SC_PAGE_SIZE);
-				size -= sysconf(_SC_PAGE_SIZE);
-			}
-
-			if(size < (size_t) sysconf(_SC_PAGE_SIZE))
-			{				
-				addr = (char*) mmap((void*) current_vaddr, size, prot, MAP_PRIVATE | MAP_FIXED, fd, current_offset);
-				size = 0;
-			}
-			else
-			{
-				addr = (char*) mmap((void*) current_vaddr, sysconf(_SC_PAGE_SIZE), prot, MAP_PRIVATE | MAP_FIXED, fd, current_offset);
-				size -= sysconf(_SC_PAGE_SIZE);
-			}
-
+			//printf("aligned_vaddr: %p\n", (void*) aligned_vaddr);
+			//printf("aligned_offset: %p\n", (void*) aligned_offset);
+			char* addr = (char*) mmap((void*) aligned_vaddr, sysconf(_SC_PAGE_SIZE), prot, MAP_PRIVATE | MAP_FIXED, fd, aligned_offset);
 			if(addr == MAP_FAILED)
 			{
 				printf("map failed, errno: %s\n", strerror(errno));
@@ -186,7 +102,7 @@ static void handler(int sig, siginfo_t* si, void* unused)
 			}
 
 			// Clear Page Aligned Offset
-			//memset((void*) aligned_vaddr, 0x0, page_align);
+			memset(addr, 0x0, page_align);
 
 			// If memsz is greater than filesz, clear remaining memory address
 			if(phdr.p_memsz > phdr.p_filesz)
@@ -203,7 +119,7 @@ static void handler(int sig, siginfo_t* si, void* unused)
 	char* addr = (char*) mmap((void*) si->si_addr, sysconf(_SC_PAGE_SIZE), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
 	if(addr == MAP_FAILED)
 	{
-		printf("anonymous map failed, errno: %s\n", strerror(errno));
+		printf("map failed, errno: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	}
 	segreturn((uint64_t) si->si_addr);
@@ -377,46 +293,15 @@ void load_program (char* filename)
 			size_t aligned_vaddr = phdr.p_vaddr - page_align;
 			size_t aligned_offset = phdr.p_offset - page_align;
 
-			char* addr = (char*) mmap((void*) aligned_vaddr, sysconf(_SC_PAGE_SIZE), prot, MAP_PRIVATE | MAP_FIXED, fd, aligned_offset);
+			char* addr = (char*) mmap((void*) aligned_vaddr, page_align + phdr.p_memsz, prot, MAP_PRIVATE | MAP_FIXED, fd, aligned_offset);
 			if(addr == MAP_FAILED)
 			{
 				printf("map failed, errno: %s\n", strerror(errno));
 				exit(EXIT_FAILURE);
 			}
-			/*
-			size_t start_vaddr = phdr.p_vaddr - page_align; 
-			size_t current_vaddr = start_vaddr;
-			size_t current_offset = phdr.p_offset - page_align;
-			size_t size = page_align + phdr.p_memsz;
-
-			printf("aligned_vaddr: %p\n", (void*) aligned_vaddr);
-			printf("aligned_offset: %lu\n", aligned_offset);
-			char* addr = NULL;
-			while(size != 0)
-			{
-				if(size < (size_t) sysconf(_SC_PAGE_SIZE))
-				{				
-					addr = (char*) mmap((void*) current_vaddr, size, prot, MAP_PRIVATE | MAP_FIXED, fd, current_offset);
-					size = 0;
-				}
-				else
-				{
-					addr = (char*) mmap((void*) current_vaddr, sysconf(_SC_PAGE_SIZE), prot, MAP_PRIVATE | MAP_FIXED, fd, current_offset);
-					size -= sysconf(_SC_PAGE_SIZE);
-				}
-
-				if(addr == MAP_FAILED)
-				{
-					printf("map failed, errno: %s\n", strerror(errno));
-					exit(EXIT_FAILURE);
-				}
-				current_vaddr += sysconf(_SC_PAGE_SIZE);
-				current_offset += sysconf(_SC_PAGE_SIZE);
-			}
-			*/
 
 			// Clear Page Aligned Offset
-			memset((void*) addr, 0x0, page_align);
+			memset(addr, 0x0, page_align);
 
 			// If memsz is greater than filesz, clear remaining memory address
 			if(phdr.p_memsz > phdr.p_filesz)
