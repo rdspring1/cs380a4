@@ -17,6 +17,7 @@
 #define ERROR -1
 #define NUM_STACK_PAGES 32
 #define BTSIZE 10
+#define SIZE 2
 
 using namespace std;
 
@@ -84,11 +85,15 @@ static void handler(int sig, siginfo_t* si, void* unused)
 			}
 
 			// Setup memory for ELF Binary
-			size_t page_align = phdr.p_offset % sysconf(_SC_PAGE_SIZE);
-			size_t aligned_vaddr = phdr.p_vaddr - page_align;
-			size_t aligned_offset = phdr.p_offset - page_align;
+			size_t size_offset = (uint64_t) si->si_addr % sysconf(_SC_PAGE_SIZE);
+			size_t aligned_vaddr = (uint64_t) si->si_addr - size_offset;
+			size_t addr_diff = aligned_vaddr - phdr.p_vaddr;
+			size_t new_offset = phdr.p_offset + addr_diff;
+			size_t page_align = new_offset % sysconf(_SC_PAGE_SIZE);
+			size_t aligned_offset = new_offset - page_align;
 
-			char* addr = (char*) mmap((void*) aligned_vaddr, page_align + phdr.p_memsz, prot, MAP_PRIVATE | MAP_FIXED, fd, aligned_offset);
+			printf("aligned_vaddr: %p\n", (void*) aligned_vaddr);
+			char* addr = (char*) mmap((void*) aligned_vaddr, sysconf(_SC_PAGE_SIZE), prot, MAP_PRIVATE | MAP_FIXED, fd, aligned_offset);
 			if(addr == MAP_FAILED)
 			{
 				printf("map failed, errno: %s\n", strerror(errno));
@@ -101,7 +106,7 @@ static void handler(int sig, siginfo_t* si, void* unused)
 			// If memsz is greater than filesz, clear remaining memory address
 			if(phdr.p_memsz > phdr.p_filesz)
 			{
-				memset((void*) (addr + page_align + phdr.p_filesz), 0x0, phdr.p_memsz - phdr.p_filesz);
+				memset((void*) (phdr.p_vaddr + page_align + phdr.p_filesz), 0x0, phdr.p_memsz - phdr.p_filesz);
 			}
 			close(fd);
 			segreturn((uint64_t) si->si_addr);
@@ -300,7 +305,7 @@ void load_program (char* filename)
 			// If memsz is greater than filesz, clear remaining memory address
 			if(phdr.p_memsz > phdr.p_filesz)
 			{
-				memset((void*) (addr + page_align + phdr.p_filesz), 0x0, phdr.p_memsz - phdr.p_filesz);
+				memset((void*) (phdr.p_vaddr + page_align + phdr.p_filesz), 0x0, phdr.p_memsz - phdr.p_filesz);
 			}
 		}
 		close(fd);
