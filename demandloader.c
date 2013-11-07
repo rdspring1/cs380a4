@@ -46,7 +46,7 @@ static void segreturn(uint64_t addr)
 
 static void handler(int sig, siginfo_t* si, void* unused)
 {
-	//printf("SIGSEGV at address: %p\n", (void*) si->si_addr);
+	printf("SIGSEGV at address: %p\n", (void*) si->si_addr);
 	// Load Page from ELF Page Header 
 	{
 		int fd = open(filename, O_RDONLY);

@@ -215,7 +215,7 @@ void load_program (char* filename)
 			size_t aligned_vaddr = phdr.p_vaddr - page_align;
 			size_t aligned_offset = phdr.p_offset - page_align;
 
-			char* addr = (char*) mmap((void*) aligned_vaddr, page_align + phdr.p_memsz, prot, MAP_PRIVATE | MAP_FIXED, fd, aligned_offset);
+			char* addr = (char*) mmap((void*) aligned_vaddr, page_align + phdr.p_filesz, prot, MAP_PRIVATE | MAP_FIXED, fd, aligned_offset);
 			if(addr == MAP_FAILED)
 			{
 				printf("map failed, errno: %s\n", strerror(errno));
@@ -228,7 +228,12 @@ void load_program (char* filename)
 			// If memsz is greater than filesz, clear remaining memory address - BSS Segment
 			if(phdr.p_memsz > phdr.p_filesz)
 			{
-				memset((void*) (phdr.p_vaddr + phdr.p_filesz), 0x0, phdr.p_memsz - phdr.p_filesz);
+				char* addr1 = (char*) mmap((void*) (phdr.p_vaddr + page_align + phdr.p_filesz), phdr.p_memsz - phdr.p_filesz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+				if(addr1 == MAP_FAILED)
+				{
+					printf("map failed, errno: %s\n", strerror(errno));
+					exit(EXIT_FAILURE);
+				}
 			}
 		}
 		close(fd);

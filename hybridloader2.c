@@ -12,9 +12,12 @@
 #include <dlfcn.h>
 #include <iostream>
 #include <signal.h>
+#include <math.h>
 
 #define ERROR -1
 #define NUM_STACK_PAGES 32
+#define BSSPAGES 100
+#define ADD 1
 
 using namespace std;
 
@@ -26,6 +29,9 @@ void* phdr_addr = NULL;
 size_t phnum;
 size_t phent;
 int elf_fd;
+
+size_t bss_addr[BSSPAGES];
+int addr_offset = -1;
 
 static void segreturn(uint64_t addr)
 {
@@ -40,16 +46,40 @@ static void segreturn(uint64_t addr)
 
 static void handler(int sig, siginfo_t* si, void* unused)
 {
-	//printf("SIGSEGV at address: %p\n", (void*) si->si_addr);
+	printf("SIGSEGV at address: %p\n", (void*) si->si_addr);
 	// Load Anonymous MMAP for BSS
 	size_t size_offset = (uint64_t) si->si_addr % sysconf(_SC_PAGE_SIZE);
 	size_t aligned_vaddr = (uint64_t) si->si_addr - size_offset;
-	char* addr = (char*) mmap((void*) aligned_vaddr, sysconf(_SC_PAGE_SIZE) * 2, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	char* addr = (char*) mmap((void*) aligned_vaddr, sysconf(_SC_PAGE_SIZE), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	if(addr == MAP_FAILED)
 	{
 		printf("map failed, errno: %s\n", strerror(errno));
 		exit(EXIT_FAILURE);
 	}
+	bss_addr[++addr_offset] = aligned_vaddr;
+	size_t next_vaddr = aligned_vaddr + sysconf(_SC_PAGE_SIZE);
+	size_t last_vaddr = 0;
+	bool avail = true;
+	for(unsigned n = 0; n < ADD; ++n)
+	{
+		if(next_vaddr == bss_addr[n])
+		{
+			avail = false;
+		}
+		last_vaddr = max(last_vaddr, bss_addr[n]);
+	}
+
+	if(!avail)
+	{
+		next_vaddr = last_vaddr + sysconf(_SC_PAGE_SIZE);
+	}
+	char* addr1 = (char*) mmap((void*) next_vaddr, sysconf(_SC_PAGE_SIZE), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if(addr1 == MAP_FAILED)
+	{
+		printf("map failed, errno: %s\n", strerror(errno));
+		exit(EXIT_FAILURE);
+	}
+	bss_addr[++addr_offset] = next_vaddr;
 	segreturn((uint64_t) si->si_addr);
 }
 
