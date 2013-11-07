@@ -2,7 +2,7 @@
 #include <time.h>
 #include <sys/time.h>
 
-#define TIMES 100
+#define TIMES 10
 #define SIZE 10000
 
 struct stuff
@@ -22,6 +22,7 @@ int main(int argc, char* argv[])
 		for(unsigned i = 0; i < SIZE; ++i)
 		{
 			s.data[i] = i;
+			printf("%u\n", i);
 		}
 	}
 	gettimeofday(&end_time, NULL);
