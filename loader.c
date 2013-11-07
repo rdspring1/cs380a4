@@ -133,10 +133,10 @@ void print_elf_auxv(char** sp)
 					break;
 				}	
 			case AT_HWCAP:
-			{
-				printf("AT_HWCAP : %lu\n", auxv->a_un.a_val);
-				break;
-			}
+				{
+					printf("AT_HWCAP : %lu\n", auxv->a_un.a_val);
+					break;
+				}
 		}
 	}
 }
@@ -225,7 +225,7 @@ void load_program (char* filename)
 			// Clear Page Aligned Offset
 			memset(addr, 0x0, page_align);
 
-			// If memsz is greater than filesz, clear remaining memory address
+			// If memsz is greater than filesz, clear remaining memory address - BSS Segment
 			if(phdr.p_memsz > phdr.p_filesz)
 			{
 				memset((void*) (phdr.p_vaddr + phdr.p_filesz), 0x0, phdr.p_memsz - phdr.p_filesz);
